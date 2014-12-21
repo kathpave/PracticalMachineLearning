@@ -1,0 +1,108 @@
+---
+output:
+  html_document:
+    fig_width: 5
+    keep_md: yes
+  pdf_document: default
+---
+### Practical Machine Learning Course: Peer Assessment 
+Report Author:  K. Pavelock 
+
+```{r setup,echo=FALSE, results='hide', message=FALSE, warning=FALSE}
+setwd("C:/1Kathy/Practical/project")
+library(caret)
+library(Hmisc)
+set.seed(2356)
+```
+
+### Introduction
+
+People regularly quantify how much of a particular activity they do, but they rarely quantify how well they do it. The data for this project relates to six young healthy participants who were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
+
+The data for this project comes from:  "Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements. Proceedings of 21st Brazilian Symposium on Artificial Intelligence. Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science. , pp. 52-61. Curitiba, PR: Springer Berlin / Heidelberg, 2012. ISBN 978-3-642-34458-9. DOI: 10.1007/978-3-642-34459-6_6."
+
+For this project, the goal is to use this data to predict the manner in which the six individuals did the exercise. Or in other words predict the "classe" variable (A, B, C, D, E). 
+
+
+### Data Cleaning, Cross-validation & Exploratory Analysis
+
+In setting up the data, the training and testing data files were loaded from https://d396qusza40orc.cloudfront.net/predmachlearn/.  The testing data was preserved for validation.  For cross-validation the original training data, consisting of 19622 observations, was split into two.  One for training (9812 observations) and another for testing (9810 observations).  In addition many of the variables were NA or null, so the data was reduced to 19 variables:  classe, user_name, cvtd_timestamp, and belt, arm, dumbbell, and forearm values for roll, pitch, yaw, and total acceleration.
+
+```{r data,echo=FALSE}
+# contrain <- url("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+# contest <- url("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+trainraw <- read.csv("pml-training.csv")
+validation <- read.csv("pml-testing.csv")
+#subset the data to relevant information 
+myvars <- c("classe", "user_name", "cvtd_timestamp",
+            "roll_belt", "pitch_belt", "yaw_belt", "total_accel_belt",
+            "roll_arm", "pitch_arm", "yaw_arm", "total_accel_arm",
+            "roll_dumbbell", "pitch_dumbbell", "yaw_dumbbell", 
+            "total_accel_dumbbell",
+            "roll_forearm", "pitch_forearm", "yaw_forearm", 
+            "total_accel_forearm",
+"gyros_belt_x", "gyros_belt_y", "gyros_belt_z", 
+"accel_belt_x", "accel_belt_y", "accel_belt_z", 
+"magnet_belt_x", "magnet_belt_y", "magnet_belt_z",
+"gyros_arm_x", "gyros_arm_y", "gyros_arm_z",
+"accel_arm_x", "accel_arm_y", "accel_arm_z",
+"magnet_arm_x", "magnet_arm_y", "magnet_arm_z",
+"gyros_dumbbell_x", "gyros_dumbbell_y", "gyros_dumbbell_z",
+"accel_dumbbell_x", "accel_dumbbell_y", "accel_dumbbell_z",
+"magnet_dumbbell_x", "magnet_dumbbell_y", "magnet_dumbbell_z",
+"gyros_forearm_x", "gyros_forearm_y", "gyros_forearm_z",
+"accel_forearm_x", "accel_forearm_y", "accel_forearm_z",
+"magnet_forearm_x", "magnet_forearm_y", "magnet_forearm_z")
+ 
+mytrain <- trainraw[myvars]
+
+inTrain = createDataPartition(mytrain$classe, p = .1)[[1]]
+training = mytrain[ inTrain,]
+testing = mytrain[-inTrain,]
+# table (training$classe)
+# 
+```
+
+Some exploratory analysis was performed by running feature plots against "classe" and the belt, arm, dumbbell, and forearm data values related to roll, pitch, yaw and total acceleration.  A summary of the visual characteristics of the feature plots included: dumbell (several diamond clusters), forearm (somewhat linear) , Belt (several distinct areas of points), arm (large blobs).  This exploratory analysis indicated that there were variables that could predict "classe."  The following figure is the feature plot for the forearm data and shows the clustering of points for each of the classe values.
+
+```{r plot,echo=FALSE}
+featurePlot(x=training[ ,c("roll_forearm","pitch_forearm","yaw_forearm"
+                           ,"total_accel_forearm")],
+            y = training$classe, plot="pairs", 
+            main="Forearm data colored by classe")
+```
+
+### Model Development 
+According to Kaggle (https://www.kaggle.com/wiki/RandomForests), Random Forests are good to use as a first cut when the underlying model is not known.  While using the caret train function with method="rf" is was discovered that it performed slowly.  After researching on the course forum, it was determined that a smaller training data set could be used with minimal impact to the accuracy.  Therefore the training set was re apportioned into a training set of 1964 observations leaving 17,658 observations for the testing data set.
+
+The first attempt at fitting a model used 18 predictor values where accuracy was used to select the optimal rain forest model using  the largest value. The final value used for this first version of the model was mtry = 21 with accuracy of 0.9468651. mtry is the number of variables randomly sampled as candidates at each split.  To determine if additional relevant variables would improve the predictions, additional predictors were added (gyro[x,y,z], accel[x,y,z], magnet[x,y,z]).  This resulted in 54 predictors with the final value used for the model at mtry = 39 with an accuracy of 0.9516364.  The final model used is summarized below. 
+
+```{r model,echo=TRUE}
+
+modFit <- train(as.factor(classe) ~ .,data=training, method="rf")
+modFit
+
+```         
+
+### Results
+
+The final model was applied to the test dataset (17658 observations) with an overall accuracy of 0.966.  This is illustrated with the confusion matrix below.
+
+
+```{r results-test,echo=FALSE}
+##use the model to make a prediction using the Test data
+    prediction <- predict(modFit, testing)
+    ##test confusion matrix
+    confusionMatrix(testing$classe, prediction)
+```        
+
+### Expected "out of sample" error
+
+Based on the cross validation accuracy rate of 0.966, the expected out of sample error is 0.034 (1 - accuracy).  If we are to validate the model with the validation data consisting of 20 samples, we would expect that at most there should be one classe (A, B, C, D, E) incorrectly predicted based on 20 X 0.034 = 0.68, rounded to the nearest whole number.  However, in submitting my predictions for the 20, 100% were accurately predicted.
+
+```{r mypredictions,echo=TRUE}
+myprediction <- predict(modFit,validation)
+myprediction
+```
+
+* === End of Report ===
